@@ -1,0 +1,9 @@
+CompileFlags:
+  # Tell clangd to use the GCC compiler driver to find system headers
+  Compiler: gcc
+  
+  # Remove flags that clang doesn't support but GCC does
+  Remove:
+    - -fsanitize=bounds-strict
+    - -fconserve-stack
+    - -fno-allow-store-data-races
