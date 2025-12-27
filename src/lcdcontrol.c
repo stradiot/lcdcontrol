@@ -125,7 +125,7 @@ static struct file_operations lcdcontrol_fops = {
 	.release = lcdcontrol_release,
 	.read = lcdcontrol_read,
 	.write = lcdcontrol_write,
-	.llseek = no_llseek,
+	.llseek = noop_llseek,
 	//.unlocked_ioctl = lcdcontrol_ioctl,
 };
 

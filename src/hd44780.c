@@ -31,10 +31,10 @@ int hd44780_init(void)
 		if (result) {
 		    pr_err("HD44780: Failed to request GPIO %d (Error %d)\n", lcd_pins[i], result);
 		    // Cleanup: Free any pins that were already successfully requested
-            while (i > 0) {
-                i--;
-                gpio_free(lcd_pins[i]);
-            }
+		    while (i > 0) {
+			i--;
+			gpio_free(lcd_pins[i]);
+		    }
 		    return result;
 		}
 
