@@ -10,10 +10,10 @@
 #define GPIO_D6     (GPIO_BASE + 17)  // Data 6
 #define GPIO_D7     (GPIO_BASE + 4 )  // Data 7
 
-int hd44780_init(void);
+int rpi_gpio_init(void);
+void rpi_gpio_release(void);
 
-void hd44780_release(void);
-
-void led_blink(void);
+void hd44780_init(void);
+void lcd_send_byte(unsigned char data, int mode);
 
 #endif // HD44780_H
