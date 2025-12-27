@@ -13,10 +13,8 @@
 #define GPIO_D6     (GPIO_BASE + 18)  // Physical Pin 12
 #define GPIO_D7     (GPIO_BASE + 22)  // Physical Pin 15
 
-int rpi_gpio_init(void);
-void rpi_gpio_release(void);
-
-void hd44780_init(void);
+int hd44780_init(void);
+void hd44780_release(void);
 void lcd_send_byte(unsigned char data, int mode);
 
 #endif // HD44780_H

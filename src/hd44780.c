@@ -30,7 +30,7 @@ static int lcd_pins[] = {
     GPIO_D7
 };
 
-int rpi_gpio_init(void)
+static int rpi_gpio_init(void)
 {
 	int i, result;
 	char label[20];
@@ -65,7 +65,7 @@ int rpi_gpio_init(void)
 	return 0;
 }
 
-void rpi_gpio_release(void)
+static void rpi_gpio_release(void)
 {
     for (int i = 0; i < ARRAY_SIZE(lcd_pins); i++) {
         gpio_set_value(lcd_pins[i], 0);
@@ -76,6 +76,7 @@ void rpi_gpio_release(void)
 
 static void lcd_pulse_enable(void)
 {
+	pr_debug("Generating Enable Pulse\n");
     gpio_set_value(GPIO_EN, 1);
     udelay(PULSE_DELAY_US);
     gpio_set_value(GPIO_EN, 0);
@@ -87,6 +88,8 @@ static void lcd_pulse_enable(void)
  */
 static void lcd_write_nibble(unsigned char nibble)
 {
+	pr_debug("Writing nibble: %02x\n", nibble);
+
     gpio_set_value(GPIO_D4, (nibble >> 0) & 0x01);
     gpio_set_value(GPIO_D5, (nibble >> 1) & 0x01);
     gpio_set_value(GPIO_D6, (nibble >> 2) & 0x01);
@@ -101,6 +104,8 @@ static void lcd_write_nibble(unsigned char nibble)
  */
 void lcd_send_byte(unsigned char data, int mode)
 {
+	pr_debug("Writing byte: %02x (%c), mode %d\n", data, data, mode);
+
     gpio_set_value(GPIO_RS, mode);
 
     // High Nibble (Upper 4 bits)
@@ -113,12 +118,20 @@ void lcd_send_byte(unsigned char data, int mode)
     
     // Extra delay for slow commands (Clear & Home take ~2ms)
     if (mode == 0 && (data == LCD_CMD_CLEAR || data == LCD_CMD_HOME)) {
+        pr_debug("Delaying for slow command\n");
         msleep(2);
     }
 }
 
-void hd44780_init(void)
+int hd44780_init(void)
 {
+	// Initialize the Raspberry Pi GPIO hardware
+    int result = rpi_gpio_init();
+	if (result) {
+		pr_err("GPIO init failed with error %d\n", result);
+        return result;
+	}
+
     pr_info("Initializing the HD44780 display...\n");
 
     // 1. Wait >15ms after VCC rises to 4.5V
@@ -175,4 +188,23 @@ void hd44780_init(void)
 
     lcd_send_byte('H', 1);
     lcd_send_byte('i', 1);
+
+    return 0;
 }
+
+void hd44780_release(void)
+{
+    pr_info("Releasing the HD44780 display...\n");
+
+    // 1. Clear the Screen (Optional: removes text)
+    lcd_send_byte(LCD_CMD_CLEAR, 0);
+    
+    // 2. Turn Display OFF (Hides cursor and text, keeps RAM)
+    // Command 0x08 = Display Off, Cursor Off, Blink Off
+    lcd_send_byte(LCD_CMD_DISPLAY_CTRL, 0);
+
+    // 3. NOW it is safe to free the GPIOs
+    // (This calls your existing release function)
+    rpi_gpio_release();
+}
+

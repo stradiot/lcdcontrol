@@ -196,15 +196,12 @@ static int __init lcdcontrol_init(void)
 
 	pr_info("Class %s created\n", lcdcontrol_class->name);
 
-	// Initialize the Raspberry Pi GPIO hardware
-	result = rpi_gpio_init();
+	// Initialize the HD44780 LCD
+	result = hd44780_init();
 	if (result) {
-		pr_err("Failed to initialize RPi GPIO hardware!\n");
+		pr_err("HD44780 initialization failed\n");
 		goto err_del_class;
 	}
-
-	// Initialize the HD44780 LCD
-	hd44780_init();
 
 	return 0;
 
@@ -221,8 +218,6 @@ err_unregister:
 static void __exit lcdcontrol_exit(void)
 {
 	pr_info("Cleaning the driver artifacts\n");
-
-	rpi_gpio_release();
 
 	device_destroy(lcdcontrol_class, lcdcontrol_dev_num);
 	cdev_del(&lcdcontrol_device.cdev);
