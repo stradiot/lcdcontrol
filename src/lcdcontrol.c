@@ -219,6 +219,9 @@ static void __exit lcdcontrol_exit(void)
 {
 	pr_info("Cleaning the driver artifacts\n");
 
+	// Release the HD44780 LCD
+	hd44780_release();
+
 	device_destroy(lcdcontrol_class, lcdcontrol_dev_num);
 	cdev_del(&lcdcontrol_device.cdev);
 	class_destroy(lcdcontrol_class);

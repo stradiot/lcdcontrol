@@ -104,7 +104,10 @@ static void lcd_write_nibble(unsigned char nibble)
  */
 void lcd_send_byte(unsigned char data, int mode)
 {
-	pr_debug("Writing byte: %02x (%c), mode %d\n", data, data, mode);
+    if (mode == 0)
+        pr_debug("Writing command byte: 0x%02X\n", data);
+    else
+        pr_debug("Writing data byte: 0x%02x (%c)\n", data, data);
 
     gpio_set_value(GPIO_RS, mode);
 
