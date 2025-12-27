@@ -170,10 +170,18 @@ static int lcdcontrol_setup_class(void)
 
 static int __init lcdcontrol_init(void)
 {
-	int result = alloc_chrdev_region(&lcdcontrol_dev_num, 0, 1, "lcdcontrol");
+	// Initialize the HD44780 LCD
+	int result = hd44780_init();
+	if (result) {
+		pr_err("HD44780 initialization failed\n");
+		return result;
+	}
+	pr_info("HD44780 initialized\n");
+
+	result = alloc_chrdev_region(&lcdcontrol_dev_num, 0, 1, "lcdcontrol");
 	if (result < 0) {
 		pr_err("Can't get major %d\n", MAJOR(lcdcontrol_dev_num));
-		return result;
+		goto err_release_hd44780;
 	}
 
 	pr_info("Major=%d, Minor=%d\n", MAJOR(lcdcontrol_dev_num), MINOR(lcdcontrol_dev_num));
@@ -196,22 +204,15 @@ static int __init lcdcontrol_init(void)
 
 	pr_info("Class %s created\n", lcdcontrol_class->name);
 
-	// Initialize the HD44780 LCD
-	result = hd44780_init();
-	if (result) {
-		pr_err("HD44780 initialization failed\n");
-		goto err_del_class;
-	}
-
 	return 0;
 
-err_del_class:
-	device_destroy(lcdcontrol_class, lcdcontrol_dev_num);
-	class_destroy(lcdcontrol_class);
 err_del_cdev:
 	cdev_del(&lcdcontrol_device.cdev);
 err_unregister:
 	unregister_chrdev_region(lcdcontrol_dev_num, 1);
+err_release_hd44780:
+	hd44780_release();
+
 	return result;
 }
 

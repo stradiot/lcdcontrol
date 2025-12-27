@@ -88,7 +88,7 @@ static void lcd_pulse_enable(void)
  */
 static void lcd_write_nibble(unsigned char nibble)
 {
-	pr_debug("Writing nibble: %02x\n", nibble);
+	pr_debug("Writing nibble: 0x%02X\n", nibble);
 
     gpio_set_value(GPIO_D4, (nibble >> 0) & 0x01);
     gpio_set_value(GPIO_D5, (nibble >> 1) & 0x01);
@@ -107,7 +107,7 @@ void lcd_send_byte(unsigned char data, int mode)
     if (mode == 0)
         pr_debug("Writing command byte: 0x%02X\n", data);
     else
-        pr_debug("Writing data byte: 0x%02x (%c)\n", data, data);
+        pr_debug("Writing data byte: 0x%02X (%c)\n", data, data);
 
     gpio_set_value(GPIO_RS, mode);
 
