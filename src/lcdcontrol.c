@@ -73,6 +73,11 @@ static void write_line_to_lcd(struct lcdcontrol_dev *lcd_dev)
 		lcd_send_byte(lcd_dev->line_buffer[i], LCD_SEND_DATA);
 	}
 
+	// Fill the rest of the line with spaces if needed
+	for (int i = lcd_dev->line_pos; i < LCD_LINE_SIZE; i++) {
+		lcd_send_byte(' ', LCD_SEND_DATA);
+	}
+
 	lcd_dev->cursor_row = (lcd_dev->cursor_row + 1) % LCD_ROWS_COUNT;
 	lcd_dev->line_pos = 0;
 
