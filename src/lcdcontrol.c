@@ -45,17 +45,6 @@ static int lcdcontrol_open(struct inode *inode, struct file *filp)
 	struct lcdcontrol_dev *lcd_dev = container_of(inode->i_cdev, struct lcdcontrol_dev, cdev);
 	filp->private_data = lcd_dev;
 
-	if (mutex_lock_interruptible(&lcd_dev->lock))
-		return -ERESTARTSYS;
-
-	memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
-	memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
-	lcd_dev->line_pos = 0;
-
-	lcd_clear();
-
-	mutex_unlock(&lcd_dev->lock);
-
 	return 0;
 }
 
@@ -285,6 +274,15 @@ static int __init lcdcontrol_init(void)
 	}
 
 	pr_info("Class %s created\n", lcdcontrol_class->name);
+
+	// Initialize screen and line buffers and clear the display
+	memset(lcdcontrol_device.screen_buffer, ' ', LCD_SCREEN_SIZE);
+	memset(lcdcontrol_device.line_buffer, 0, LCD_LINE_SIZE);
+	lcdcontrol_device.line_pos = 0;
+
+	lcd_clear();
+
+	pr_info("LCD initialized\n");
 
 	return 0;
 
