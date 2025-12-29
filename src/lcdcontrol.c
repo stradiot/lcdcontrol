@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 
 #include "hd44780.h"
+#include "lcdcontrol.h"
 
 static dev_t lcdcontrol_dev_num;
 static struct class *lcdcontrol_class;
@@ -190,6 +191,41 @@ static ssize_t lcdcontrol_read(struct file *filp, char __user *buff, size_t coun
 	return read_size;
 }
 
+static long lcdcontrol_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	struct lcdcontrol_dev *lcd_dev = (struct lcdcontrol_dev *) filp->private_data;
+	struct lcd_config config;
+
+	// Use a mutex to prevent race conditions during configuration
+	if (mutex_lock_interruptible(&lcd_dev->lock))
+		return -ERESTARTSYS;
+
+	switch (cmd) {
+		case LCD_IOCTL_CLEAR:
+			memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
+			memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
+			lcd_dev->line_pos = 0;
+			
+			lcd_clear();
+			break;
+		case LCD_IOCTL_SET_CONFIG:
+			if (copy_from_user(&config, (struct lcd_config __user *)arg, sizeof(config))) {
+				mutex_unlock(&lcd_dev->lock);
+				return -EFAULT;
+			}
+
+			lcd_configure(&config);
+			break;
+		default:
+			mutex_unlock(&lcd_dev->lock);
+			return -ENOTTY; // Error: "Inappropriate ioctl for device"
+	}
+
+	mutex_unlock(&lcd_dev->lock);
+
+	return 0;
+}
+
 static struct file_operations lcdcontrol_fops = {
 	.owner = THIS_MODULE,
 	.open = lcdcontrol_open,
@@ -197,7 +233,7 @@ static struct file_operations lcdcontrol_fops = {
 	.read = lcdcontrol_read,
 	.write = lcdcontrol_write,
 	.llseek = noop_llseek,
-	//.unlocked_ioctl = lcdcontrol_ioctl,
+	.unlocked_ioctl = lcdcontrol_ioctl
 };
 
 static int lcdcontrol_setup_cdev(struct lcdcontrol_dev *dev)

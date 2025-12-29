@@ -16,10 +16,13 @@
 #define LCD_SEND_DATA 1
 #define LCD_SEND_CMD  0
 
+#include "lcdcontrol.h"
+
 int hd44780_init(void);
 void hd44780_release(void);
 void lcd_send_byte(unsigned char data, int mode);
 void lcd_clear(void);
 void lcd_set_cursor_row(int row);
+void lcd_configure(struct lcd_config *cfg);
 
 #endif // HD44780_H

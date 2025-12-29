@@ -19,6 +19,7 @@
 #include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/module.h>
+
 #include "hd44780.h"
 
 static int lcd_pins[] = {
@@ -216,6 +217,26 @@ void lcd_set_cursor_row(int row)
     }
 
     lcd_send_byte(0x80 | address, LCD_SEND_CMD); // Set DDRAM address command
+}
+
+/*
+ * Configures the Display Control Register (0x08)
+ * Bit 2: Display (D)
+ * Bit 1: Cursor (C)
+ * Bit 0: Blink (B)
+ */
+void lcd_configure(struct lcd_config *cfg)
+{
+    unsigned char cmd_byte = 0x08; // Base command for Display Control
+
+    if (cfg->display_on) cmd_byte |= 0x04;
+    if (cfg->cursor_on)  cmd_byte |= 0x02;
+    if (cfg->blink_on)   cmd_byte |= 0x01;
+
+    pr_debug("Applying Config: Display=%d, Cursor=%d, Blink=%d (Cmd: 0x%02X)\n",
+             cfg->display_on, cfg->cursor_on, cfg->blink_on, cmd_byte);
+
+    lcd_send_byte(cmd_byte, LCD_SEND_CMD);
 }
 
 void hd44780_release(void)
