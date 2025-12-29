@@ -104,7 +104,7 @@ static void lcd_write_nibble(unsigned char nibble)
  */
 void lcd_send_byte(unsigned char data, int mode)
 {
-    if (mode == 0)
+    if (mode == LCD_SEND_CMD)
         pr_debug("Writing command byte: 0x%02X\n", data);
     else
         pr_debug("Writing data byte: 0x%02X (%c)\n", data, data);
@@ -120,7 +120,7 @@ void lcd_send_byte(unsigned char data, int mode)
     lcd_pulse_enable();
     
     // Extra delay for slow commands (Clear & Home take ~2ms)
-    if (mode == 0 && (data == LCD_CMD_CLEAR || data == LCD_CMD_HOME)) {
+    if ((mode == LCD_SEND_CMD) && (data == LCD_CMD_CLEAR || data == LCD_CMD_HOME)) {
         pr_debug("Delaying for slow command\n");
         msleep(2);
     }
@@ -144,7 +144,7 @@ int hd44780_init(void)
     // In this phase, we cannot use lcd_send_byte because the LCD
     // might still think it is in 8-bit mode. We manually send nibbles.
 
-    gpio_set_value(GPIO_RS, 0); // Command Mode
+    gpio_set_value(GPIO_RS, LCD_SEND_CMD); // Command Mode
 
     // Step 1: Send 0x03
     lcd_write_nibble(0x03);
@@ -171,40 +171,62 @@ int hd44780_init(void)
 
     // Function Set: 4-bit mode, 2 lines, 5x8 font
     // 0x20 | 0x08 (2 lines) | 0x00 (5x8 dots) = 0x28
-    lcd_send_byte(0x28, 0);
+    lcd_send_byte(0x28, LCD_SEND_CMD);
 
     // Display Control: Display OFF, Cursor OFF, Blink OFF
-    lcd_send_byte(0x08, 0);
+    lcd_send_byte(0x08, LCD_SEND_CMD);
 
     // Clear Display
-    lcd_send_byte(0x01, 0);
+    lcd_send_byte(0x01, LCD_SEND_CMD);
 
     // Entry Mode Set: Increment cursor, No shift
     // 0x04 | 0x02 (Increment) = 0x06
-    lcd_send_byte(0x06, 0);
+    lcd_send_byte(0x06, LCD_SEND_CMD);
 
     // Display Control: Display ON, Cursor OFF, Blink OFF
     // 0x08 | 0x04 (Display On) = 0x0C
-    lcd_send_byte(0x0C, 0);
+    lcd_send_byte(0x0C, LCD_SEND_CMD);
 
     pr_info("HD44780: Initialization Complete.\n");
 
-    lcd_send_byte('H', 1);
-    lcd_send_byte('i', 1);
-
     return 0;
+}
+
+void lcd_clear(void)
+{
+    pr_debug("Clearing the LCD display...\n");
+    lcd_send_byte(LCD_CMD_CLEAR, LCD_SEND_CMD);
+}
+
+void lcd_set_cursor_row(int row)
+{
+    unsigned char address;
+
+    switch (row) {
+        case 0:
+            address = 0x00;
+            break;
+        case 1:
+            address = 0x40;
+            break;
+        default:
+            pr_warn("Invalid row %d, defaulting to row 0\n", row);
+            address = 0x00;
+            break;
+    }
+
+    lcd_send_byte(0x80 | address, LCD_SEND_CMD); // Set DDRAM address command
 }
 
 void hd44780_release(void)
 {
     pr_info("Releasing the HD44780 display...\n");
 
-    // 1. Clear the Screen (Optional: removes text)
-    lcd_send_byte(LCD_CMD_CLEAR, 0);
-    
+    // 1. Clear the display
+    lcd_clear();
     // 2. Turn Display OFF (Hides cursor and text, keeps RAM)
     // Command 0x08 = Display Off, Cursor Off, Blink Off
-    lcd_send_byte(LCD_CMD_DISPLAY_CTRL, 0);
+    lcd_send_byte(LCD_CMD_DISPLAY_CTRL, LCD_SEND_CMD);
 
     // 3. NOW it is safe to free the GPIOs
     // (This calls your existing release function)

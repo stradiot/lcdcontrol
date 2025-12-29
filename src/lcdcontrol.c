@@ -1,6 +1,10 @@
 #define DEBUG
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#define LCD_SCREEN_SIZE 32
+#define LCD_LINE_SIZE 16
+#define LCD_ROWS_COUNT 2
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/printk.h>
@@ -23,6 +27,12 @@ MODULE_LICENSE("Dual BSD/GPL");
 struct lcdcontrol_dev {
 	struct mutex lock;
 	struct cdev cdev;
+
+	char screen_buffer[LCD_SCREEN_SIZE];
+	char line_buffer[LCD_LINE_SIZE];
+
+	int line_pos;
+	int cursor_row;
 };
 
 static struct lcdcontrol_dev lcdcontrol_device;
@@ -31,7 +41,15 @@ static int lcdcontrol_open(struct inode *inode, struct file *filp)
 {
 	pr_info("Device opened\n");
 
-	filp->private_data = container_of(inode->i_cdev, struct lcdcontrol_dev, cdev);
+	struct lcdcontrol_dev *lcd_dev = container_of(inode->i_cdev, struct lcdcontrol_dev, cdev);
+	filp->private_data = lcd_dev;
+
+	memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
+	memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
+	lcd_dev->line_pos = 0;
+	lcd_dev->cursor_row = 0;
+
+	lcd_clear();
 
 	return 0;
 }
@@ -40,6 +58,23 @@ static int lcdcontrol_release(struct inode *inode, struct file *filp)
 {
 	pr_info("Device released\n");
 	return 0;
+}
+
+static bool is_valid_char(char c)
+{
+	return (c >= 0x20 && c <= 0x7E);
+}
+
+static void write_line_to_lcd(struct lcdcontrol_dev *lcd_dev)
+{
+	for (int i = 0; i < lcd_dev->line_pos; i++) {
+		lcd_send_byte(lcd_dev->line_buffer[i], LCD_SEND_DATA);
+	}
+
+	lcd_dev->cursor_row = (lcd_dev->cursor_row + 1) % LCD_ROWS_COUNT;
+	lcd_dev->line_pos = 0;
+
+	lcd_set_cursor_row(lcd_dev->cursor_row);
 }
 
 static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
@@ -72,6 +107,32 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 	}
 
 	pr_debug("Received from user: %s\n", write_buffer);
+
+	// Process each character and update LCD
+	for (size_t i = 0; i < count; i++) {
+		char c = write_buffer[i];
+
+		if (c == '\n') {
+			// Write the current line to the LCD
+			write_line_to_lcd(lcd_dev);
+			continue;
+		}
+
+		if (!is_valid_char(c)) {
+			pr_debug("Ignoring invalid character: 0x%02X\n", c);
+			continue;
+		}
+
+		// Place character in line buffer
+		lcd_dev->line_buffer[lcd_dev->line_pos] = c;
+		lcd_dev->line_pos++;
+
+		if (lcd_dev->line_pos == LCD_LINE_SIZE) {
+			// Write the line to the LCD
+			write_line_to_lcd(lcd_dev);
+			continue;
+		}
+	}
 
 	mutex_unlock(&lcd_dev->lock);
 

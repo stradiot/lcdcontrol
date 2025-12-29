@@ -13,8 +13,13 @@
 #define GPIO_D6     (GPIO_BASE + 18)  // Physical Pin 12
 #define GPIO_D7     (GPIO_BASE + 22)  // Physical Pin 15
 
+#define LCD_SEND_DATA 1
+#define LCD_SEND_CMD  0
+
 int hd44780_init(void);
 void hd44780_release(void);
 void lcd_send_byte(unsigned char data, int mode);
+void lcd_clear(void);
+void lcd_set_cursor_row(int row);
 
 #endif // HD44780_H
