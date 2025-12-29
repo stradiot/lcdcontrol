@@ -34,7 +34,6 @@ struct lcdcontrol_dev {
 	char line_buffer[LCD_LINE_SIZE];
 
 	int line_pos;
-	int cursor_row;
 };
 
 static struct lcdcontrol_dev lcdcontrol_device;
@@ -49,7 +48,6 @@ static int lcdcontrol_open(struct inode *inode, struct file *filp)
 	memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
 	memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
 	lcd_dev->line_pos = 0;
-	lcd_dev->cursor_row = 0;
 
 	lcd_clear();
 
@@ -67,21 +65,46 @@ static bool is_valid_char(char c)
 	return (c >= 0x20 && c <= 0x7E);
 }
 
+static void lcd_refresh_screen(struct lcdcontrol_dev *lcd_dev)
+{
+    int i;
+    
+    // 1. Write Top Line (From Shadow Index 0-15)
+    lcd_set_cursor_row(0);
+    for (i = 0; i < LCD_LINE_SIZE; i++) {
+        lcd_send_byte(lcd_dev->screen_buffer[i], LCD_SEND_DATA);
+    }
+    
+    // 2. Write Bottom Line (From Shadow Index 16-31)
+    lcd_set_cursor_row(1);
+    for (i = 0; i < LCD_LINE_SIZE; i++) {
+        lcd_send_byte(lcd_dev->screen_buffer[LCD_LINE_SIZE + i], LCD_SEND_DATA);
+    }
+}
+
 static void write_line_to_lcd(struct lcdcontrol_dev *lcd_dev)
 {
-	for (int i = 0; i < lcd_dev->line_pos; i++) {
-		lcd_send_byte(lcd_dev->line_buffer[i], LCD_SEND_DATA);
-	}
-
-	// Fill the rest of the line with spaces if needed
-	for (int i = lcd_dev->line_pos; i < LCD_LINE_SIZE; i++) {
-		lcd_send_byte(' ', LCD_SEND_DATA);
-	}
-
-	lcd_dev->cursor_row = (lcd_dev->cursor_row + 1) % LCD_ROWS_COUNT;
-	lcd_dev->line_pos = 0;
-
-	lcd_set_cursor_row(lcd_dev->cursor_row);
+    // 1. SCROLL: Move Line 2 (bottom) to Line 1 (top)
+    // We copy 16 bytes from offset 16 to offset 0
+    memmove(lcd_dev->screen_buffer, lcd_dev->screen_buffer + LCD_LINE_SIZE, LCD_LINE_SIZE);
+    
+    // 2. UPDATE: Write the new line to Line 2 (bottom)
+    // We loop through all 16 slots to ensure we overwrite old data (Padding)
+    for (int i = 0; i < LCD_LINE_SIZE; i++) {
+        if (i < lcd_dev->line_pos) {
+            // Write data
+            lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = lcd_dev->line_buffer[i];
+        } else {
+            // Write padding (space)
+            lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = ' ';
+        }
+    }
+    
+    // 3. SYNC: Push the updated memory to the display
+    lcd_refresh_screen(lcd_dev);
+    
+    // 4. RESET: Prepare for the next log line
+    lcd_dev->line_pos = 0;
 }
 
 static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
