@@ -45,11 +45,16 @@ static int lcdcontrol_open(struct inode *inode, struct file *filp)
 	struct lcdcontrol_dev *lcd_dev = container_of(inode->i_cdev, struct lcdcontrol_dev, cdev);
 	filp->private_data = lcd_dev;
 
+	if (mutex_lock_interruptible(&lcd_dev->lock))
+		return -ERESTARTSYS;
+
 	memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
 	memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
 	lcd_dev->line_pos = 0;
 
 	lcd_clear();
+
+	mutex_unlock(&lcd_dev->lock);
 
 	return 0;
 }
@@ -172,39 +177,28 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 static ssize_t lcdcontrol_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
 {
 	pr_debug("Read: count %zu, f_pos %lld\n", count, *f_pos);
-	int result;
+
 	struct lcdcontrol_dev *lcd_dev = (struct lcdcontrol_dev *) filp->private_data;
+
+	if (*f_pos >= LCD_SCREEN_SIZE)
+		return 0;
 
 	if (mutex_lock_interruptible(&lcd_dev->lock))
 		return -ERESTARTSYS;
 
-	static const char msg[] = "LCDControl read\n";
-	size_t msg_len = strlen(msg);
-	size_t read_size = ((msg_len - *f_pos) > count) ? count : (msg_len - *f_pos);
-
-	// Access my_dev->buffer ...
-
-	if (*f_pos >= msg_len) {
-		result = 0;
-		goto mutex_unlock;
-	}
+	char msg[LCD_SCREEN_SIZE];
+	memcpy(msg, lcd_dev->screen_buffer, LCD_SCREEN_SIZE);
+	size_t read_size = (count < (LCD_SCREEN_SIZE - *f_pos)) ? count : (LCD_SCREEN_SIZE - *f_pos);
 
 	mutex_unlock(&lcd_dev->lock);
 
 	if (copy_to_user(buff, msg + *f_pos, read_size)){
-		result = -EFAULT;
-		goto out;
+		return -EFAULT;
 	}
 
 	*f_pos += read_size;
-	result = read_size;
 
-	goto out;
-
-mutex_unlock:
-	mutex_unlock(&lcd_dev->lock);
-out:
-	return result;
+	return read_size;
 }
 
 static struct file_operations lcdcontrol_fops = {
