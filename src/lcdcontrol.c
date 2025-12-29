@@ -1,6 +1,8 @@
 #define DEBUG
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#define MAX_BUFFER_SIZE 1024
+
 #define LCD_SCREEN_SIZE 32
 #define LCD_LINE_SIZE 16
 #define LCD_ROWS_COUNT 2
@@ -80,36 +82,38 @@ static void write_line_to_lcd(struct lcdcontrol_dev *lcd_dev)
 static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
 {
 	pr_debug("Write: count %zu, f_pos %lld\n", count, *f_pos);
-	ssize_t result = count;
 
 	struct lcdcontrol_dev *lcd_dev = (struct lcdcontrol_dev *) filp->private_data;
 
-	if (count > 1024) {
-		result = -EINVAL;
-		goto out;
-	}
+	ssize_t copy_count = (count > MAX_BUFFER_SIZE) ? MAX_BUFFER_SIZE : count;
 
-	char *write_buffer = kzalloc(count + 1, GFP_KERNEL);
+	char *write_buffer = kzalloc(copy_count + 1, GFP_KERNEL);
 
-	if (!write_buffer) {
-		result = -ENOMEM;
-		goto out;
-	}
+	if (!write_buffer)
+		return -ENOMEM;
 
-	if(copy_from_user(write_buffer, buff, count)) {
-		result = -EFAULT;
-		goto buffer_free;
+	if(copy_from_user(write_buffer, buff, copy_count)) {
+		kfree(write_buffer);
+		return -EFAULT;
 	}
 
 	if (mutex_lock_interruptible(&lcd_dev->lock)) {
-		result = -ERESTARTSYS;
-		goto buffer_free;
+		kfree(write_buffer);
+		return -ERESTARTSYS;
 	}
 
 	pr_debug("Received from user: %s\n", write_buffer);
 
 	// Process each character and update LCD
-	for (size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < copy_count; i++) {
+		if (lcd_dev->line_pos >= LCD_LINE_SIZE) {
+			char *next_newline = memchr(write_buffer + i, '\n', copy_count - i);
+			if (!next_newline)
+				break;
+
+			i = next_newline - write_buffer;
+		}
+
 		char c = write_buffer[i];
 
 		if (c == '\n') {
@@ -127,19 +131,14 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 		lcd_dev->line_buffer[lcd_dev->line_pos] = c;
 		lcd_dev->line_pos++;
 
-		if (lcd_dev->line_pos == LCD_LINE_SIZE) {
-			// Write the line to the LCD
-			write_line_to_lcd(lcd_dev);
-			continue;
-		}
 	}
 
 	mutex_unlock(&lcd_dev->lock);
 
-buffer_free:
 	kfree(write_buffer);
-out:
-	return result;
+
+	// Return full count as the whole buffer is processed
+	return count;
 }
 
 static ssize_t lcdcontrol_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
