@@ -1,15 +1,17 @@
 obj-m := lcdcontrol.o
+lcdcontrol-y := src/lcdcontrol.o src/hd44780.o
 
 ccflags-y := -I$(src)/include
 
-lcdcontrol-y := src/lcdcontrol.o src/hd44780.o
-
-KERNEL_DIR ?= /lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
+SRC := $(shell pwd)
 
 all:
-	@make -C $(KERNEL_DIR) M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules
+
+modules_install:
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install
 
 clean:
-	@make -C $(KERNEL_DIR) M=$(PWD) clean
-	@rm -f compile_commands.json
+	rm -f *.o *~ core .depend .*.cmd *.ko *.mod.c
+	rm -f Module.markers Module.symvers modules.order
+	rm -rf .tmp_versions Modules.symvers
