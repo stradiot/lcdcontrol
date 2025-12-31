@@ -1,11 +1,11 @@
 #define DEBUG
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#define MAX_BUFFER_SIZE 1024
+#define MAX_BUFFER_SIZE		1024
 
-#define LCD_SCREEN_SIZE 32
-#define LCD_LINE_SIZE 16
-#define LCD_ROWS_COUNT 2
+#define LCD_SCREEN_SIZE		32
+#define LCD_LINE_SIZE		16
+#define LCD_ROWS_COUNT		2
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -62,44 +62,42 @@ static bool is_valid_char(char c)
 
 static void lcd_refresh_screen(struct lcdcontrol_dev *lcd_dev)
 {
-    int i;
-    
-    // 1. Write Top Line (From Shadow Index 0-15)
-    lcd_set_cursor_row(0);
-    for (i = 0; i < LCD_LINE_SIZE; i++) {
-        lcd_send_byte(lcd_dev->screen_buffer[i], LCD_SEND_DATA);
-    }
-    
-    // 2. Write Bottom Line (From Shadow Index 16-31)
-    lcd_set_cursor_row(1);
-    for (i = 0; i < LCD_LINE_SIZE; i++) {
-        lcd_send_byte(lcd_dev->screen_buffer[LCD_LINE_SIZE + i], LCD_SEND_DATA);
-    }
+	int i;
+
+	/* 1. Write Top Line (From Shadow Index 0-15) */
+	lcd_set_cursor_row(0);
+	for (i = 0; i < LCD_LINE_SIZE; i++)
+		lcd_send_byte(lcd_dev->screen_buffer[i], LCD_SEND_DATA);
+
+	/* 2. Write Bottom Line (From Shadow Index 16-31) */
+	lcd_set_cursor_row(1);
+	for (i = 0; i < LCD_LINE_SIZE; i++)
+		lcd_send_byte(lcd_dev->screen_buffer[LCD_LINE_SIZE + i], LCD_SEND_DATA);
 }
 
 static void write_line_to_lcd(struct lcdcontrol_dev *lcd_dev)
 {
-    // 1. SCROLL: Move Line 2 (bottom) to Line 1 (top)
-    // We copy 16 bytes from offset 16 to offset 0
-    memmove(lcd_dev->screen_buffer, lcd_dev->screen_buffer + LCD_LINE_SIZE, LCD_LINE_SIZE);
-    
-    // 2. UPDATE: Write the new line to Line 2 (bottom)
-    // We loop through all 16 slots to ensure we overwrite old data (Padding)
-    for (int i = 0; i < LCD_LINE_SIZE; i++) {
-        if (i < lcd_dev->line_pos) {
-            // Write data
-            lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = lcd_dev->line_buffer[i];
-        } else {
-            // Write padding (space)
-            lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = ' ';
-        }
-    }
-    
-    // 3. SYNC: Push the updated memory to the display
-    lcd_refresh_screen(lcd_dev);
-    
-    // 4. RESET: Prepare for the next log line
-    lcd_dev->line_pos = 0;
+	/* 1. SCROLL: Move Line 2 (bottom) to Line 1 (top) */
+	/* We copy 16 bytes from offset 16 to offset 0 */
+	memmove(lcd_dev->screen_buffer, lcd_dev->screen_buffer + LCD_LINE_SIZE, LCD_LINE_SIZE);
+
+	/* 2. UPDATE: Write the new line to Line 2 (bottom) */
+	/* We loop through all 16 slots to ensure we overwrite old data (Padding) */
+	for (int i = 0; i < LCD_LINE_SIZE; i++) {
+		if (i < lcd_dev->line_pos) {
+			/* Write data */
+			lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = lcd_dev->line_buffer[i];
+		} else {
+			/* Write padding (space) */
+			lcd_dev->screen_buffer[LCD_LINE_SIZE + i] = ' ';
+		}
+	}
+
+	/* 3. SYNC: Push the updated memory to the display */
+	lcd_refresh_screen(lcd_dev);
+
+	/* 4. RESET: Prepare for the next log line */
+	lcd_dev->line_pos = 0;
 }
 
 static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
@@ -115,7 +113,7 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 	if (!write_buffer)
 		return -ENOMEM;
 
-	if(copy_from_user(write_buffer, buff, copy_count)) {
+	if (copy_from_user(write_buffer, buff, copy_count)) {
 		kfree(write_buffer);
 		return -EFAULT;
 	}
@@ -127,10 +125,11 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 
 	pr_debug("Received from user: %s\n", write_buffer);
 
-	// Process each character and update LCD
+	/* Process each character and update LCD */
 	for (size_t i = 0; i < copy_count; i++) {
 		if (lcd_dev->line_pos >= LCD_LINE_SIZE) {
 			char *next_newline = memchr(write_buffer + i, '\n', copy_count - i);
+
 			if (!next_newline)
 				break;
 
@@ -140,7 +139,7 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 		char c = write_buffer[i];
 
 		if (c == '\n') {
-			// Write the current line to the LCD
+			/* Write the current line to the LCD */
 			write_line_to_lcd(lcd_dev);
 			continue;
 		}
@@ -150,17 +149,15 @@ static ssize_t lcdcontrol_write(struct file *filp, const char __user *buff, size
 			continue;
 		}
 
-		// Place character in line buffer
+		/* Place character in line buffer */
 		lcd_dev->line_buffer[lcd_dev->line_pos] = c;
 		lcd_dev->line_pos++;
-
 	}
 
 	mutex_unlock(&lcd_dev->lock);
-
 	kfree(write_buffer);
 
-	// Return full count as the whole buffer is processed
+	/* Return full count as the whole buffer is processed */
 	return count;
 }
 
@@ -182,9 +179,8 @@ static ssize_t lcdcontrol_read(struct file *filp, char __user *buff, size_t coun
 
 	mutex_unlock(&lcd_dev->lock);
 
-	if (copy_to_user(buff, msg + *f_pos, read_size)){
+	if (copy_to_user(buff, msg + *f_pos, read_size))
 		return -EFAULT;
-	}
 
 	*f_pos += read_size;
 
@@ -196,29 +192,29 @@ static long lcdcontrol_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 	struct lcdcontrol_dev *lcd_dev = (struct lcdcontrol_dev *) filp->private_data;
 	struct lcd_config config;
 
-	// Use a mutex to prevent race conditions during configuration
+	/* Use a mutex to prevent race conditions during configuration */
 	if (mutex_lock_interruptible(&lcd_dev->lock))
 		return -ERESTARTSYS;
 
 	switch (cmd) {
-		case LCD_IOCTL_CLEAR:
-			memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
-			memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
-			lcd_dev->line_pos = 0;
-			
-			lcd_clear();
-			break;
-		case LCD_IOCTL_SET_CONFIG:
-			if (copy_from_user(&config, (struct lcd_config __user *)arg, sizeof(config))) {
-				mutex_unlock(&lcd_dev->lock);
-				return -EFAULT;
-			}
+	case LCD_IOCTL_CLEAR:
+		memset(lcd_dev->screen_buffer, ' ', LCD_SCREEN_SIZE);
+		memset(lcd_dev->line_buffer, 0, LCD_LINE_SIZE);
+		lcd_dev->line_pos = 0;
 
-			lcd_configure(&config);
-			break;
-		default:
+		lcd_clear();
+		break;
+	case LCD_IOCTL_SET_CONFIG:
+		if (copy_from_user(&config, (struct lcd_config __user *)arg, sizeof(config))) {
 			mutex_unlock(&lcd_dev->lock);
-			return -ENOTTY; // Error: "Inappropriate ioctl for device"
+			return -EFAULT;
+		}
+
+		lcd_configure(&config);
+		break;
+	default:
+		mutex_unlock(&lcd_dev->lock);
+		return -ENOTTY; /* Error: "Inappropriate ioctl for device" */
 	}
 
 	mutex_unlock(&lcd_dev->lock);
@@ -226,13 +222,13 @@ static long lcdcontrol_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 	return 0;
 }
 
-static struct file_operations lcdcontrol_fops = {
-	.owner = THIS_MODULE,
-	.open = lcdcontrol_open,
-	.release = lcdcontrol_release,
-	.read = lcdcontrol_read,
-	.write = lcdcontrol_write,
-	.llseek = noop_llseek,
+static const struct file_operations lcdcontrol_fops = {
+	.owner		= THIS_MODULE,
+	.open		= lcdcontrol_open,
+	.release	= lcdcontrol_release,
+	.read		= lcdcontrol_read,
+	.write		= lcdcontrol_write,
+	.llseek		= noop_llseek,
 	.unlocked_ioctl = lcdcontrol_ioctl
 };
 
@@ -245,9 +241,8 @@ static int lcdcontrol_setup_cdev(struct lcdcontrol_dev *dev)
 	dev->cdev.ops = &lcdcontrol_fops;
 
 	err = cdev_add(&dev->cdev, lcdcontrol_dev_num, 1);
-	if (err) {
+	if (err)
 		pr_err("Error %d adding lcdcontrol cdev\n", err);
-	}
 
 	return err;
 }
@@ -277,7 +272,7 @@ static int lcdcontrol_setup_class(void)
 
 static int __init lcdcontrol_init(void)
 {
-	// Initialize the HD44780 LCD
+	/* Initialize the HD44780 LCD */
 	int result = hd44780_init();
 	if (result) {
 		pr_err("HD44780 initialization failed\n");
@@ -311,7 +306,7 @@ static int __init lcdcontrol_init(void)
 
 	pr_info("Class %s created\n", lcdcontrol_class->name);
 
-	// Initialize screen and line buffers and clear the display
+	/* Initialize screen and line buffers and clear the display */
 	memset(lcdcontrol_device.screen_buffer, ' ', LCD_SCREEN_SIZE);
 	memset(lcdcontrol_device.line_buffer, 0, LCD_LINE_SIZE);
 	lcdcontrol_device.line_pos = 0;
@@ -336,7 +331,7 @@ static void __exit lcdcontrol_exit(void)
 {
 	pr_info("Cleaning the driver artifacts\n");
 
-	// Release the HD44780 LCD
+	/* Release the HD44780 LCD */
 	hd44780_release();
 
 	device_destroy(lcdcontrol_class, lcdcontrol_dev_num);
